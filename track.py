@@ -1,4 +1,7 @@
 import os
+import urllib.request
+from mutagen.easyid3 import EasyID3
+from mutagen.id3 import ID3, APIC
 from spotipy import Spotify
 from typing import List, Dict, Any
 from youtube_search import YoutubeSearch
@@ -15,8 +18,7 @@ class Track:
         self.album = album
 
     def getId(self):
-        result = YoutubeSearch(f"{self.name} {self.artist}", max_results=1).to_dict()
-        return result[0]['id']
+        return YoutubeSearch(f"{self.name} {self.artist}", max_results=1).to_dict()[0]['id']
     
     def download(self, options: Dict[str, Any]):
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -29,8 +31,24 @@ class Track:
             pass
         onlyfiles = [f for f in os.listdir('music/') if os.path.isfile(os.path.join('music/', f))]
 
-
-
+        for file in onlyfiles:
+            filepath = f'music/{file}'
+            audio = EasyID3(filepath)
+            urllib.request.urlretrieve(self.cover, "album_art/image.jpg")
+            audio['title'] = self.name
+            audio['artist'] = self.artist
+            audio['album'] = self.album
+            audio.save()
+            audiox = ID3(filepath)
+            with open('album_art/image.jpg', 'rb') as albumart:
+                audiox['APIC'] = APIC(
+                    encoding=3,
+                    mime='image/jpg',
+                    type=3,
+                    desc='Cover Art',
+                    data=albumart.read()
+                )
+                audiox.save()
 
 # Singleton
 # A single playlist containing a list of tracks i.e songs

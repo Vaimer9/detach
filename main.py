@@ -1,20 +1,21 @@
-from distutils.command.clean import clean
+#! /usr/bin/python3
+
+from typing import Tuple
 import os
 import urllib.request
+from track import *
 from youtube_search import YoutubeSearch
 from spotipy.oauth2 import SpotifyClientCredentials
 import spotipy
+from spotipy import Spotify
 import yt_dlp
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC
 import sys
-import shutil
-import time
-
 
 # Setting the spotify credentials to access the web api
-def setAuth(client_id, client_secret):
-    auth_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+def setAuth(client_id: str, client_secret: str) -> Spotify:
+    auth_manager = SpotifyClientCredentials(client_id, client_secret)
     sp = spotipy.Spotify(auth_manager=auth_manager)
     return sp
 
@@ -55,18 +56,18 @@ def getPlaylistTrackId(playlist_url, sp):
         artist_info = sp.artist(artists_uri)
         genre_list.append(artist_info['genres'])
         cover_image_list.append(song_track['album']['images'][0]['url'])
-    all_music_data = {
+
+    return {
         'song_list' : song_name_list,
         'album_list' : album_list,
         'artist_list' : artist_list,
         'cover_images' : cover_image_list
-     }
-    return all_music_data
+    }
 
 def getYoutubeIdfromSong(song_list, artist_list):
     result_list = []
     i = 0
-    for song in song_list:
+    for _ in song_list:
         search_string = song_list[i] + ' ' + artist_list[i]
         results = YoutubeSearch(search_string, max_results=1).to_dict()
         print('got: ' + song_list[i] + ' by ' + artist_list[i])
@@ -82,9 +83,12 @@ def createYoutubeIdList(yt_results):
             ytIdList.append(elements[i]['id'])
     return ytIdList
 
+# Hook for showing download progress
 def my_hook(d):
     if d['status'] == 'finished':
-        print('Done downloading, now converting ...')
+        print(f"-------{ d['filename'] } was finished downloading-------")
+    elif d['status'] == 'downloading':
+        print(f"Downloading {d['filename']}: {d['_percent_str']}% complete")
 
 def downloadFromYtDL(id_list):
     url_list = []
@@ -97,6 +101,7 @@ def downloadFromYtDL(id_list):
         }],
         'progress_hooks': [my_hook],
         'outtmpl' : 'music/%(title)s.%(ext)s',
+        'external_downloader_args': ['-loglevel', 'panic']
     }
     for id in id_list:
         url_list.append(('https://www.youtube.com/watch?v=' + id))
@@ -104,13 +109,11 @@ def downloadFromYtDL(id_list):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-
 def metadataTagger(music_data):
     try:
         os.mkdir('album_art')
     except:
         pass
-    outputdir = 'album_art\\'
     onlyfiles = [f for f in os.listdir('music/') if os.path.isfile(os.path.join('music/', f))]
     for file in onlyfiles:
         filepath = 'music/' + file
@@ -134,35 +137,33 @@ def metadataTagger(music_data):
                     )
                 audiox.save()
 
-def zipItUp(sp):
-    results = sp.user_playlist(user=None, playlist_id=sys.argv[1], fields="name")
-    timestr = time.strftime("%Y%m%d-%H%M%S")
-    zipfilename = results['name'] + '_' + timestr 
-    shutil.make_archive(zipfilename, 'zip', 'music')
-    shutil.rmtree('music/')
-    shutil.rmtree('album_art/')
+def getCredentialsfromEnv() -> Tuple[str, str]:
+    if "SPOTIFY_KEY" in os.environ and "SPOTIFY_SECRET" in os.environ:
+        return (os.environ["SPOTIFY_KEY"], os.environ["SPOTIFY_SECRET"])
+    else:
+        client_id = input('Enter client ID: ')
+        client_secret = input('Enter Client Secret: ')
+        return (client_id, client_secret)
 
 
+# Create Playlist
+music_data = Playlist(sys.argv[1])
 
-print('setting authtoken')
-if os.path.isfile('creds'):
-    with open('creds') as file:
-        lines = [line.rstrip() for line in file]
-    authToken = setAuth(lines[0], lines[1])
-else:
-    print('Enter client ID: ')
-    client_id = input()
-    print('Enter Client Secret: ')
-    client_secret = input()
-    authToken = setAuth(client_id, client_secret)
-print('spotify tracks')
-music_data = getPlaylistTrackId(sys.argv[1], authToken)
-print('youtube results')
-yt_results = getYoutubeIdfromSong(music_data['song_list'], music_data['artist_list'])
-print(music_data['cover_images'])
-print('now downloading')
+# Create client from credentials
+creds = getCredentialsfromEnv()
+client = setAuth(creds[0], creds[1])
+
+# Populate the playlist with tracks using the client
+music_data.populate(client)
+
+# Convert to separate lists for now
+lists = music_data.getSeparateLists()
+
+# Get search results
+yt_results = getYoutubeIdfromSong(lists['song_list'], lists['artist_list'])
+
+# Donwload using the search results
 downloadFromYtDL(yt_results)
-print('setting metadata')
-metadataTagger(music_data)
-zipItUp(authToken)
 
+# Attach metadata
+metadataTagger(music_data)

@@ -1,9 +1,18 @@
 import os
+from typing import List, Dict, Any
+
+import os
+import urllib.request
+from track import *
+from youtube_search import YoutubeSearch
+from spotipy.oauth2 import SpotifyClientCredentials
+import spotipy
+from spotipy import Spotify
+import yt_dlp
 import urllib.request
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC
 from spotipy import Spotify
-from typing import List, Dict, Any
 from youtube_search import YoutubeSearch
 import yt_dlp
 
@@ -17,13 +26,18 @@ class Track:
         self.cover = cover
         self.album = album
 
+    # Get youtube Id for song 
+    # The search query used is: "<songname> <songartist>"
+    # Only the first result is taken
     def getId(self):
         return YoutubeSearch(f"{self.name} {self.artist}", max_results=1).to_dict()[0]['id']
     
+    # Download teh spotify track from youtube search result
     def download(self, options: Dict[str, Any]):
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download(f"https://www.youtube.com/watch?v={self.getId()}")
 
+    # Attach the metadata taken from spotify to the mp3 file itself
     def attachMetadata(self):
         try:
             os.mkdir('album_art')
@@ -78,7 +92,10 @@ class Playlist:
         
         # Get track IDs for later use
         for element in id_list:
-            track_id_list.append(element['track']['id'])
+            
+            # Null pointer flashbacks
+            if element['track'] != None:
+                track_id_list.append(element['track']['id'])
 
         # Populate the playlist structure with songs
         for element in track_id_list:
@@ -113,3 +130,10 @@ class Playlist:
             'artist_list' : artist_list,
             'cover_images' : cover_image_list
         }
+
+def getClient(id: str, secret: str) -> Spotify:
+    auth_manager = SpotifyClientCredentials(id, secret)
+    sp = spotipy.Spotify(auth_manager=auth_manager)
+    return sp
+
+def 

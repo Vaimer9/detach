@@ -1,7 +1,7 @@
 # Detach (WIP)
 A fork of [spotify-playlist-dl](https://github.com/inmicro/spotify-playlist-dl) rewritten by me for fun and personal use.
 
-### Dependancies
+### Dependencies
 You will require `ffmpeg` to be on your system
 
 ### Disclaimer
